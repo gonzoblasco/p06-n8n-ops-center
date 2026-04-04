@@ -1,199 +1,139 @@
-# AGENT_TASKS — P05 Docs Chat
+# AGENT_TASKS.md — P06 n8n Ops Center
 
-## Contexto
+## Estado general
 
-Pipeline RAG completo: ingest → chunk → embed → store → retrieve → generate.
-Cada respuesta muestra fuentes con fragmentos exactos y similarity score.
+- Fase actual: 1 — MCP Server
+- Última task completada: —
+- Próxima task: T01
 
-Stack: Next.js 16, Supabase pgvector, OpenAI text-embedding-3-small, Anthropic claude-sonnet-4-6, pdf-parse, LangChain.
+## Contexto del proyecto
 
----
+Dashboard Next.js para monitorear, ejecutar y debuggear workflows n8n.
+Núcleo: servidor MCP HTTP streamable (puerto 3001) que expone la n8n API como tools.
+AI feature: análisis de errores de ejecuciones fallidas con claude-sonnet-4-6.
 
-## FASE 1 — Database schema
-
-### TASK-01: Migración Supabase — tablas documents y document_chunks
-
-**Contexto:** Necesitamos dos tablas. `documents` guarda metadata del archivo original. `document_chunks` guarda los fragmentos con su embedding.
-
-**Instrucciones para el agente:**
-
-1. Leer `.knowledge/conventions.md` antes de empezar
-2. Crear migración en `supabase/migrations/`
-3. Crear tabla `documents` con campos: id, user_id, title, file_type, file_size, status, created_at
-4. Crear tabla `document_chunks` con campos: id, document_id, content, embedding vector(1536), chunk_index, metadata jsonb, created_at
-5. Crear función RPC `match_document_chunks(query_embedding vector, match_threshold float, match_count int, document_ids uuid[])` para similarity search
-6. Aplicar RLS: user solo ve sus propios documents y chunks
-7. Verificar con Supabase MCP que la migración aplicó correctamente
-
-**Criterios de aceptación:**
-
-- [ ] Tablas creadas con tipos correctos
-- [ ] RLS activo en ambas tablas
-- [ ] Función RPC retorna chunks ordenados por similitud
-- [ ] Index en embedding column (ivfflat o hnsw)
+Stack: Next.js 16 · TypeScript · Tailwind · shadcn/ui · Anthropic API · n8n API
+n8n base URL: https://n8n.srv920035.hstgr.cloud/api/v1
+MCP server: /mcp-server (directorio separado dentro del repo)
 
 ---
 
-## FASE 2 — Ingestion pipeline
+## FASE 1 — MCP Server custom
 
-### TASK-02: API route POST /api/documents/upload
+### T01 — Scaffold MCP server TypeScript
 
-**Contexto:** Recibe un archivo PDF o MD, extrae texto, chunquea, embeds y guarda en Supabase.
+- Crear `/mcp-server` con su propio `package.json`
+- Dependencias: `@modelcontextprotocol/sdk`, `express`, `zod`
+- Entry point: `src/index.ts`
+- HTTP streamable en puerto 3001
+- Auth: leer `N8N_API_KEY` desde env
+- Status: [ ] pendiente
 
-**Instrucciones para el agente:**
+### T02 — Tool: list_workflows
 
-1. Crear `src/app/api/documents/upload/route.ts`
-2. Parsear form-data con el archivo
-3. Extraer texto: usar `pdf-parse` para PDF, leer directo para MD
-4. Chunking con LangChain `RecursiveCharacterTextSplitter`: chunk_size=1000, chunk_overlap=200
-5. Para cada chunk: generar embedding con OpenAI `text-embedding-3-small`
-6. Guardar documento en tabla `documents` con status='processing' → luego 'ready'
-7. Guardar chunks en tabla `document_chunks` con embedding y metadata (page_number si aplica)
-8. Manejar errores: si falla el embedding de un chunk, loguear y continuar
-9. Retornar `{ document_id, chunk_count, status }`
+- GET /api/v1/workflows
+- Devuelve: id, name, active, updatedAt de cada workflow
+- Status: [ ] pendiente
 
-**Criterios de aceptación:**
+### T03 — Tool: get_executions
 
-- [ ] PDF de 10 páginas se procesa sin error
-- [ ] Chunks guardados con embeddings válidos (vector de 1536 floats)
-- [ ] Status del documento se actualiza a 'ready' al terminar
-- [ ] Error handling no rompe el proceso completo por un chunk fallido
+- GET /api/v1/executions?workflowId={id}&limit=10
+- Devuelve: id, status, startedAt, stoppedAt, error (si existe)
+- Status: [ ] pendiente
 
----
+### T04 — Tool: run_workflow
 
-### TASK-03: API route GET /api/documents
+- POST /api/v1/workflows/{id}/run
+- Acepta payload opcional
+- Status: [ ] pendiente
 
-**Contexto:** Lista los documentos del usuario con metadata básica.
+### T05 — Tool: get_execution_detail
 
-**Instrucciones para el agente:**
+- GET /api/v1/executions/{id}
+- Devuelve logs completos + data de cada nodo
+- Status: [ ] pendiente
 
-1. Crear `src/app/api/documents/route.ts`
-2. Consultar tabla `documents` filtrando por user_id del session
-3. Retornar array con: id, title, file_type, status, chunk_count (count de document_chunks), created_at
-4. Ordenar por created_at DESC
+### T06 — Hardening auth + error handling
 
-**Criterios de aceptación:**
-
-- [ ] Solo retorna documentos del usuario autenticado
-- [ ] chunk_count es correcto
+- Todos los tools validan N8N_API_KEY presente
+- Errores de n8n API mapeados a respuestas MCP claras
+- Status: [ ] pendiente
 
 ---
 
-### TASK-04: API route DELETE /api/documents/[id]
+## FASE 2 — Next.js App
 
-**Instrucciones para el agente:**
+### T07 — Limpieza de p05 + env vars
 
-1. Verificar ownership (document.user_id === session.user.id)
-2. Eliminar document_chunks asociados
-3. Eliminar document
-4. Retornar 204
+- Eliminar rutas/componentes específicos de p05 (ingest, chat)
+- Crear `.env.local` con N8N_API_KEY y MCP_SERVER_URL
+- Crear `.env.example` con placeholders
+- Status: [ ] pendiente
 
-**Criterios de aceptación:**
+### T08 — /dashboard — lista de workflows
 
-- [ ] No puede eliminar documentos de otro usuario (retorna 403)
-- [ ] Chunks se eliminan en cascada o explícitamente
+- Consume list_workflows via API route que llama al MCP
+- Tabla: nombre, estado (activo/inactivo), última actualización
+- Status: [ ] pendiente
 
----
+### T09 — Página de detalle de workflow
 
-## FASE 3 — Retrieval + Generation
+- Lista de últimas 10 ejecuciones (get_executions)
+- Badge de status por ejecución: success / error / running
+- Botón "Ejecutar" → llama run_workflow
+- Status: [ ] pendiente
 
-### TASK-05: API route POST /api/chat
+### T10 — Panel de logs de ejecución
 
-**Contexto:** Recibe query del usuario + lista de document_ids seleccionados. Hace retrieval y genera respuesta con fuentes.
-
-**Instrucciones para el agente:**
-
-1. Crear `src/app/api/chat/route.ts`
-2. Recibir: `{ query: string, document_ids: string[], history: Message[] }`
-3. Embeds la query con `text-embedding-3-small`
-4. Llamar RPC `match_document_chunks` con threshold=0.7, count=5, document_ids
-5. Construir system prompt con los chunks como contexto
-6. El system prompt debe indicar explícitamente: no agregar headers markdown, no texto introductorio, responder basado SOLO en el contexto provisto
-7. Llamar Anthropic SDK con streaming habilitado
-8. En la respuesta incluir: stream del texto + sources array `[{ chunk_id, content_preview, similarity_score, document_title }]`
-9. Usar SSE para streaming (patrón del P03)
-
-**Criterios de aceptación:**
-
-- [ ] Respuesta llega en streaming
-- [ ] Sources array incluye los chunks usados con su score
-- [ ] Si no hay chunks relevantes (todos bajo threshold), responde "No encontré información relevante en los documentos seleccionados"
-- [ ] History se incluye en el contexto para multi-turn
+- Modal o side panel al clickear una ejecución fallida
+- Muestra error message + nodo donde falló
+- Botón "Analizar con IA" (se conecta en T12)
+- Status: [ ] pendiente
 
 ---
 
-## FASE 4 — UI
+## FASE 3 — AI feature
 
-### TASK-06: Página /dashboard/documents — gestión de documentos
+### T11 — API route /api/analyze-error
 
-**Instrucciones para el agente:**
+- Recibe: workflowId, executionId, errorMessage, nodeName
+- Llama claude-sonnet-4-6 con el contexto del error
+- Devuelve: causa probable + fix sugerido (texto plano, sin markdown headers)
+- Status: [ ] pendiente
 
-1. Crear `src/app/dashboard/documents/page.tsx`
-2. Lista de documentos con: título, tipo, estado (badge), chunk count, fecha, botón eliminar
-3. Componente de upload: drag & drop o file picker, acepta PDF y MD únicamente
-4. Progress indicator durante el procesamiento
-5. Estado vacío con call to action claro
+### T12 — Integración del análisis en el panel de logs
 
-**Criterios de aceptación:**
-
-- [ ] Upload funciona para PDF y MD
-- [ ] Estado 'processing' se refleja en la UI
-- [ ] Eliminar documento actualiza la lista
+- Botón "Analizar con IA" → llama /api/analyze-error
+- Muestra resultado inline en el panel
+- Estados: idle / loading / result / error
+- Status: [ ] pendiente
 
 ---
 
-### TASK-07: Página /dashboard/chat — interfaz de chat con RAG
+## FASE 4 — Cierre
 
-**Instrucciones para el agente:**
+### T13 — PR Review
 
-1. Crear `src/app/dashboard/chat/page.tsx`
-2. Sidebar izquierdo: lista de documentos con checkboxes para seleccionar cuáles usar
-3. Área principal: chat interface con historial
-4. Cada respuesta del asistente muestra debajo: sección colapsable "Fuentes" con fragmentos y score
-5. Score mostrado como porcentaje (similarity \* 100) con color: verde >80%, amarillo 60-80%, gris <60%
-6. Input con envío por Enter o botón
-7. Skeleton loader mientras llega la respuesta
+- Invocar @.agents/skills/pr-review/SKILL.md
+- Status: [ ] pendiente
 
-**Criterios de aceptación:**
+### T14 — Skill n8n-workflow + README
 
-- [ ] Streaming visible en tiempo real
-- [ ] Fuentes expandibles por respuesta
-- [ ] Selección de documentos persiste durante la sesión
-- [ ] Al menos un documento debe estar seleccionado para poder enviar
+- Documentar el patrón MCP HTTP streamable
+- Crear .agents/skills/n8n-workflow/SKILL.md
+- Status: [ ] pendiente
 
----
+### T15 — Commit final y cierre
 
-## FASE 5 — Skill + Review
-
-### TASK-08: Crear skill rag-pipeline
-
-**Instrucciones para el agente:**
-
-1. Crear `.agents/skills/rag-pipeline/SKILL.md`
-2. El skill debe documentar: estrategia de chunking elegida y por qué, threshold de similarity recomendado, patrón de system prompt para RAG, estructura de la respuesta con sources
-
-**Criterios de aceptación:**
-
-- [ ] Skill invocable con contexto: "implementar RAG pipeline"
-- [ ] Incluye decisiones y tradeoffs, no solo pasos
+- Conventional commit por fase completada
+- Actualizar curriculum map
+- Status: [ ] pendiente
 
 ---
 
-### TASK-09: PR Review
+## Decisiones de arquitectura
 
-```
-@.agents/skills/pr-review/SKILL.md
-Revisar P05 completo antes del commit final.
-Foco: ownership checks en todas las API routes, manejo de errores en embedding pipeline, threshold de similarity configurable via env var.
-```
-
----
-
-## Orden de ejecución
-
-```
-TASK-01 → TASK-02 → TASK-03 → TASK-04 → TASK-05 → TASK-06 → TASK-07 → TASK-08 → TASK-09
-```
-
-Cada task = un commit en Conventional Commits format.
-No avanzar a la siguiente sin que los criterios de aceptación estén cumplidos.
+- MCP server corre como proceso separado (no embebido en Next.js)
+- Next.js se comunica con el MCP via HTTP fetch a localhost:3001
+- La n8n API key nunca se expone al frontend — solo el MCP server la usa
+- El MCP server es stateless — no persiste nada
