@@ -13,9 +13,40 @@ if (!n8nApiKey) {
 const app = express();
 app.use(express.json());
 
+const N8N_BASE_URL = "https://n8n.srv920035.hstgr.cloud/api/v1";
+
 const server = new McpServer({
   name: "n8n-ops-center",
   version: "1.0.0",
+});
+
+server.tool("list_workflows", "List all workflows from n8n", {}, async () => {
+  const response = await fetch(`${N8N_BASE_URL}/workflows`, {
+    headers: { "X-N8N-API-KEY": n8nApiKey as string },
+  }).catch((err: unknown) => {
+    throw new Error(`Network error contacting n8n: ${String(err)}`);
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `n8n API error: ${response.status} ${response.statusText}`
+    );
+  }
+
+  const data = (await response.json()) as {
+    data: { id: string; name: string; active: boolean; updatedAt: string }[];
+  };
+
+  const workflows = data.data.map(({ id, name, active, updatedAt }) => ({
+    id,
+    name,
+    active,
+    updatedAt,
+  }));
+
+  return {
+    content: [{ type: "text" as const, text: JSON.stringify(workflows, null, 2) }],
+  };
 });
 
 app.post("/mcp", async (req: Request, res: Response) => {
