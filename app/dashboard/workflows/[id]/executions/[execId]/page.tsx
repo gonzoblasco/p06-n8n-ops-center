@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { AnalyzeErrorButton } from '@/components/analyze-error-button'
 
 type ExecutionDetail = {
   id: string
@@ -82,9 +82,12 @@ export default async function ExecutionDetailPage({
           <h1 className="text-3xl font-bold tracking-tight">Detalle de ejecución</h1>
           <p className="text-muted-foreground mt-1 text-sm font-mono">{execId}</p>
         </div>
-        <Button disabled title="Próximamente">
-          Analizar con IA
-        </Button>
+        <AnalyzeErrorButton
+          workflowId={id}
+          executionId={execId}
+          errorMessage={execution?.error?.message}
+          nodeName={execution?.error?.nodeName}
+        />
       </div>
 
       {!execution ? (
