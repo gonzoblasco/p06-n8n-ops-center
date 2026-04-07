@@ -11,6 +11,11 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
+const formatDate = (iso: string) => {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 type Workflow = {
   id: string
   name: string
@@ -52,7 +57,7 @@ export function WorkflowsTable({ workflows }: { workflows: Workflow[] }) {
               </Badge>
             </TableCell>
             <TableCell className="text-muted-foreground">
-              {new Date(wf.updatedAt).toLocaleString('es-AR')}
+              {formatDate(wf.updatedAt)}
             </TableCell>
           </TableRow>
         ))}

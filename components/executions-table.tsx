@@ -19,6 +19,11 @@ type Execution = {
   error?: string
 }
 
+const formatDate = (iso: string) => {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
 function statusBadge(status: string) {
   switch (status) {
     case 'success':
@@ -75,7 +80,7 @@ export function ExecutionsTable({
             <TableCell className="font-mono">{ex.id.slice(0, 8)}</TableCell>
             <TableCell>{statusBadge(ex.status)}</TableCell>
             <TableCell className="text-muted-foreground">
-              {new Date(ex.startedAt).toLocaleString('es-AR')}
+              {formatDate(ex.startedAt)}
             </TableCell>
             <TableCell className="text-muted-foreground">
               {formatDuration(ex.startedAt, ex.stoppedAt)}
