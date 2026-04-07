@@ -115,14 +115,14 @@ server.tool(
       throw new Error(`Invalid JSON payload: ${payload}`);
     }
 
-    const response = await n8nFetch(
-      `/workflows/${encodeURIComponent(workflowId)}/run`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      }
-    );
+    const requestBody: Record<string, unknown> = { workflowId };
+    if (payload !== "{}") requestBody.data = body;
+
+    const response = await n8nFetch(`/executions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(requestBody),
+    });
     await assertOk(response);
 
     const data = (await response.json()) as {
