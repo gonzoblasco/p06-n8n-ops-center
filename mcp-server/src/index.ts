@@ -1,7 +1,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import express, { Request, Response } from "express";
+import express, { NextFunction, Request, Response } from "express";
 import { z } from "zod";
+
+type FetchResponse = Awaited<ReturnType<typeof fetch>>;
 
 const PORT = 3001;
 
@@ -11,10 +13,27 @@ if (!n8nApiKey) {
   process.exit(1);
 }
 
+const N8N_BASE_URL = "https://n8n.srv920035.hstgr.cloud/api/v1";
+
+async function n8nFetch(path: string, options: RequestInit = {}): Promise<FetchResponse> {
+  const headers = new Headers(options.headers);
+  headers.set("X-N8N-API-KEY", n8nApiKey as string);
+
+  return fetch(`${N8N_BASE_URL}${path}`, { ...options, headers }).catch(
+    (err: unknown) => {
+      throw new Error(`Network error contacting n8n: ${String(err)}`);
+    }
+  );
+}
+
+async function assertOk(response: FetchResponse): Promise<void> {
+  if (!response.ok) {
+    throw new Error(`n8n API error: ${response.status} ${response.statusText}`);
+  }
+}
+
 const app = express();
 app.use(express.json());
-
-const N8N_BASE_URL = "https://n8n.srv920035.hstgr.cloud/api/v1";
 
 const server = new McpServer({
   name: "n8n-ops-center",
@@ -22,17 +41,8 @@ const server = new McpServer({
 });
 
 server.tool("list_workflows", "List all workflows from n8n", {}, async () => {
-  const response = await fetch(`${N8N_BASE_URL}/workflows`, {
-    headers: { "X-N8N-API-KEY": n8nApiKey as string },
-  }).catch((err: unknown) => {
-    throw new Error(`Network error contacting n8n: ${String(err)}`);
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `n8n API error: ${response.status} ${response.statusText}`
-    );
-  }
+  const response = await n8nFetch("/workflows");
+  await assertOk(response);
 
   const data = (await response.json()) as {
     data: { id: string; name: string; active: boolean; updatedAt: string }[];
@@ -58,19 +68,10 @@ server.tool(
     limit: z.number().optional().default(10).describe("Max number of executions to return"),
   },
   async ({ workflowId, limit }) => {
-    const url = `${N8N_BASE_URL}/executions?workflowId=${encodeURIComponent(workflowId)}&limit=${limit}`;
-
-    const response = await fetch(url, {
-      headers: { "X-N8N-API-KEY": n8nApiKey as string },
-    }).catch((err: unknown) => {
-      throw new Error(`Network error contacting n8n: ${String(err)}`);
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `n8n API error: ${response.status} ${response.statusText}`
-      );
-    }
+    const response = await n8nFetch(
+      `/executions?workflowId=${encodeURIComponent(workflowId)}&limit=${limit}`
+    );
+    await assertOk(response);
 
     const data = (await response.json()) as {
       data: {
@@ -114,27 +115,21 @@ server.tool(
       throw new Error(`Invalid JSON payload: ${payload}`);
     }
 
-    const response = await fetch(
-      `${N8N_BASE_URL}/workflows/${encodeURIComponent(workflowId)}/run`,
+    const response = await n8nFetch(
+      `/workflows/${encodeURIComponent(workflowId)}/run`,
       {
         method: "POST",
-        headers: {
-          "X-N8N-API-KEY": n8nApiKey as string,
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       }
-    ).catch((err: unknown) => {
-      throw new Error(`Network error contacting n8n: ${String(err)}`);
-    });
+    );
+    await assertOk(response);
 
-    if (!response.ok) {
-      throw new Error(
-        `n8n API error: ${response.status} ${response.statusText}`
-      );
-    }
-
-    const data = (await response.json()) as { executionId?: string; status?: string; data?: { executionId?: string; status?: string } };
+    const data = (await response.json()) as {
+      executionId?: string;
+      status?: string;
+      data?: { executionId?: string; status?: string };
+    };
     const executionId = data.executionId ?? data.data?.executionId ?? null;
     const status = data.status ?? data.data?.status ?? "unknown";
 
@@ -156,20 +151,10 @@ server.tool(
     executionId: z.string().describe("The execution ID to retrieve"),
   },
   async ({ executionId }) => {
-    const response = await fetch(
-      `${N8N_BASE_URL}/executions/${encodeURIComponent(executionId)}`,
-      {
-        headers: { "X-N8N-API-KEY": n8nApiKey as string },
-      }
-    ).catch((err: unknown) => {
-      throw new Error(`Network error contacting n8n: ${String(err)}`);
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `n8n API error: ${response.status} ${response.statusText}`
-      );
-    }
+    const response = await n8nFetch(
+      `/executions/${encodeURIComponent(executionId)}`
+    );
+    await assertOk(response);
 
     const data = (await response.json()) as {
       id: string;
@@ -209,37 +194,58 @@ server.tool(
   }
 );
 
-app.post("/mcp", async (req: Request, res: Response) => {
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-  });
-  res.on("close", () => {
-    transport.close();
-  });
-  await server.connect(transport);
-  await transport.handleRequest(req, res, req.body);
+// Global error handler — logs unhandled errors before Express/SDK processes them
+app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  console.error("[MCP server error]", err);
+  res.status(500).json({ error: "Internal server error" });
 });
 
-app.get("/mcp", async (req: Request, res: Response) => {
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-  });
-  res.on("close", () => {
-    transport.close();
-  });
-  await server.connect(transport);
-  await transport.handleRequest(req, res);
+app.post("/mcp", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+    });
+    res.on("close", () => {
+      transport.close();
+    });
+    await server.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+  } catch (err) {
+    console.error("[MCP POST /mcp error]", err);
+    next(err);
+  }
 });
 
-app.delete("/mcp", async (req: Request, res: Response) => {
-  const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: undefined,
-  });
-  res.on("close", () => {
-    transport.close();
-  });
-  await server.connect(transport);
-  await transport.handleRequest(req, res);
+app.get("/mcp", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+    });
+    res.on("close", () => {
+      transport.close();
+    });
+    await server.connect(transport);
+    await transport.handleRequest(req, res);
+  } catch (err) {
+    console.error("[MCP GET /mcp error]", err);
+    next(err);
+  }
+});
+
+app.delete("/mcp", async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: undefined,
+    });
+    res.on("close", () => {
+      transport.close();
+    });
+    await server.connect(transport);
+    await transport.handleRequest(req, res);
+  } catch (err) {
+    console.error("[MCP DELETE /mcp error]", err);
+    next(err);
+  }
 });
 
 app.listen(PORT, () => {
