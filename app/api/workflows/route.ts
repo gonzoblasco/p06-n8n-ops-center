@@ -14,6 +14,7 @@ export async function GET() {
   try {
     response = await fetch(`${mcpUrl}/mcp`, {
       method: 'POST',
+      cache: 'no-store',
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json, text/event-stream',

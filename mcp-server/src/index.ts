@@ -41,7 +41,7 @@ const server = new McpServer({
 });
 
 server.tool("list_workflows", "List all workflows from n8n", {}, async () => {
-  const response = await n8nFetch("/workflows");
+  const response = await n8nFetch("/workflows?limit=250");
   await assertOk(response);
 
   const data = (await response.json()) as {
