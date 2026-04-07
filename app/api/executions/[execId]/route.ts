@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
 
 type ExecutionDetail = {
   id: string
@@ -16,6 +17,10 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ execId: string }> }
 ) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
   const { execId } = await params
   const mcpUrl = process.env.MCP_SERVER_URL ?? 'http://localhost:3001'
 

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { createClient } from '@/lib/supabase/server'
 
 type RequestBody = {
   workflowId?: string
@@ -12,7 +13,16 @@ type AnthropicResponse = {
 }
 
 export async function POST(req: Request) {
-  const body: RequestBody = await req.json()
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  let body: RequestBody
+  try {
+    body = await req.json()
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON body' }, { status: 400 })
+  }
 
   if (!body.errorMessage) {
     return NextResponse.json({ error: 'errorMessage es requerido' }, { status: 400 })
