@@ -1,45 +1,14 @@
-'use client'
-
-import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-
-type State =
-  | { status: 'idle' }
-  | { status: 'loading' }
-  | { status: 'success'; executionId: string | null }
-  | { status: 'error'; message: string }
+const N8N_BASE_URL = 'https://n8n.srv920035.hstgr.cloud'
 
 export function RunWorkflowButton({ workflowId }: { workflowId: string }) {
-  const [state, setState] = useState<State>({ status: 'idle' })
-
-  async function handleRun() {
-    setState({ status: 'loading' })
-    try {
-      const res = await fetch(`/api/workflows/${workflowId}/run`, { method: 'POST' })
-      const data = await res.json()
-      if (!res.ok) {
-        setState({ status: 'error', message: data.error ?? 'Error desconocido' })
-      } else {
-        setState({ status: 'success', executionId: data.executionId ?? null })
-      }
-    } catch (err) {
-      setState({ status: 'error', message: String(err) })
-    }
-  }
-
   return (
-    <div className="flex flex-col gap-2">
-      <Button onClick={handleRun} disabled={state.status === 'loading'}>
-        {state.status === 'loading' ? 'Ejecutando...' : 'Ejecutar workflow'}
-      </Button>
-      {state.status === 'success' && (
-        <p className="text-sm text-green-600">
-          Ejecución iniciada{state.executionId ? `: ${state.executionId}` : ''}
-        </p>
-      )}
-      {state.status === 'error' && (
-        <p className="text-sm text-destructive">{state.message}</p>
-      )}
-    </div>
+    <a
+      href={`${N8N_BASE_URL}/workflow/${workflowId}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 bg-primary text-primary-foreground hover:bg-primary/90 h-10 px-4 py-2"
+    >
+      Abrir en n8n
+    </a>
   )
 }

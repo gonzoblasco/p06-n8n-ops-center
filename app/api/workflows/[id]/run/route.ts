@@ -1,3 +1,7 @@
+// NOTE: This endpoint is not used in production.
+// n8n's REST API does not expose a reliable execution endpoint for workflows
+// with a Manual Trigger node. The UI links directly to the n8n editor instead.
+// Kept here as a reference in case the trigger type changes or the API adds support.
 import { NextResponse } from 'next/server'
 
 export async function POST(
