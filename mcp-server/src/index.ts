@@ -95,6 +95,60 @@ server.tool(
   }
 );
 
+server.tool(
+  "run_workflow",
+  "Trigger a run of a specific n8n workflow",
+  {
+    workflowId: z.string().describe("The workflow ID to run"),
+    payload: z
+      .string()
+      .optional()
+      .default("{}")
+      .describe("JSON-stringified object to send as the request body"),
+  },
+  async ({ workflowId, payload }) => {
+    let body: unknown;
+    try {
+      body = JSON.parse(payload);
+    } catch {
+      throw new Error(`Invalid JSON payload: ${payload}`);
+    }
+
+    const response = await fetch(
+      `${N8N_BASE_URL}/workflows/${encodeURIComponent(workflowId)}/run`,
+      {
+        method: "POST",
+        headers: {
+          "X-N8N-API-KEY": n8nApiKey as string,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      }
+    ).catch((err: unknown) => {
+      throw new Error(`Network error contacting n8n: ${String(err)}`);
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `n8n API error: ${response.status} ${response.statusText}`
+      );
+    }
+
+    const data = (await response.json()) as { executionId?: string; status?: string; data?: { executionId?: string; status?: string } };
+    const executionId = data.executionId ?? data.data?.executionId ?? null;
+    const status = data.status ?? data.data?.status ?? "unknown";
+
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify({ executionId, status }, null, 2),
+        },
+      ],
+    };
+  }
+);
+
 app.post("/mcp", async (req: Request, res: Response) => {
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
