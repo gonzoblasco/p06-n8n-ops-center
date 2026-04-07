@@ -149,6 +149,66 @@ server.tool(
   }
 );
 
+server.tool(
+  "get_execution_detail",
+  "Get full details of a specific n8n execution",
+  {
+    executionId: z.string().describe("The execution ID to retrieve"),
+  },
+  async ({ executionId }) => {
+    const response = await fetch(
+      `${N8N_BASE_URL}/executions/${encodeURIComponent(executionId)}`,
+      {
+        headers: { "X-N8N-API-KEY": n8nApiKey as string },
+      }
+    ).catch((err: unknown) => {
+      throw new Error(`Network error contacting n8n: ${String(err)}`);
+    });
+
+    if (!response.ok) {
+      throw new Error(
+        `n8n API error: ${response.status} ${response.statusText}`
+      );
+    }
+
+    const data = (await response.json()) as {
+      id: string;
+      status: string;
+      startedAt: string;
+      stoppedAt: string | null;
+      mode: string;
+      data?: {
+        resultData?: {
+          error?: {
+            message?: string;
+            node?: { name?: string };
+          };
+        };
+      };
+    };
+
+    const result: Record<string, unknown> = {
+      id: data.id,
+      status: data.status,
+      startedAt: data.startedAt,
+      stoppedAt: data.stoppedAt,
+      mode: data.mode,
+    };
+
+    const error = data.data?.resultData?.error;
+    if (error) {
+      result.error = {
+        message: error.message ?? String(error),
+        nodeName: error.node?.name ?? null,
+      };
+    }
+
+    return {
+      content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }],
+    };
+  }
+);
+
 app.post("/mcp", async (req: Request, res: Response) => {
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
