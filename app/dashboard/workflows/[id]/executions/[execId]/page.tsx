@@ -85,7 +85,9 @@ export default async function ExecutionDetailPage({
         <AnalyzeErrorButton
           workflowId={id}
           executionId={execId}
-          errorMessage={execution?.error?.message}
+          errorMessage={execution?.status === 'error'
+            ? (execution.error?.message ?? 'Error desconocido en la ejecución')
+            : undefined}
           nodeName={execution?.error?.nodeName}
         />
       </div>
