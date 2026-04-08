@@ -16,14 +16,46 @@ type ExecutionDetail = {
   }
 }
 
-const BASE = process.env.NEXT_PUBLIC_VERCEL_URL
-  ? `https://${process.env.NEXT_PUBLIC_VERCEL_URL}`
-  : 'http://localhost:3000'
+const MCP_URL = process.env.MCP_SERVER_URL ?? 'http://localhost:3001'
 
 async function getExecutionDetail(execId: string): Promise<ExecutionDetail | null> {
-  const res = await fetch(`${BASE}/api/executions/${execId}`, { cache: 'no-store' })
-  if (!res.ok) return null
-  return res.json()
+  try {
+    const response = await fetch(`${MCP_URL}/mcp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json, text/event-stream',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'get_execution_detail', arguments: { executionId: execId } },
+      }),
+      cache: 'no-store',
+    })
+    if (!response.ok) return null
+
+    const text = await response.text()
+
+    let mcpResult: unknown
+    for (const line of text.split('\n')) {
+      if (line.startsWith('data: ')) {
+        try { mcpResult = JSON.parse(line.slice(6)); break } catch { /* skip */ }
+      }
+    }
+    if (!mcpResult) {
+      try { mcpResult = JSON.parse(text) } catch { return null }
+    }
+
+    const result = (mcpResult as { result?: { content?: { type: string; text: string }[] } })
+      ?.result?.content?.[0]?.text
+    if (!result) return null
+
+    return JSON.parse(result) as ExecutionDetail
+  } catch {
+    return null
+  }
 }
 
 function statusBadge(status: string) {
