@@ -15,7 +15,7 @@
 - 📊 **Dashboard Centralizado**: Visualiza todos tus workflows y su estado actual de un vistazo.
 - 🕒 **Historial de Ejecuciones**: Monitoreo en tiempo real de ejecuciones recientes (Éxito, Error, En curso).
 - 🔍 **Depuración Profunda**: Detalle técnico de cada ejecución, incluyendo duración, logs y el nodo exacto del fallo.
-- 🤖 **AI Error Analysis**: Integración con **Claude 3.5 Sonnet** para analizar mensajes de error técnicos, explicar la causa raíz y sugerir correcciones precisas.
+- 🤖 **AI Error Analysis**: Integración con **Claude Sonnet 4.6** para analizar mensajes de error técnicos, explicar la causa raíz y sugerir correcciones precisas.
 - 🔗 **Acceso Directo**: Enlaces inteligentes al editor de n8n para intervenir inmediatamente en los flujos.
 
 ## 🏗️ Arquitectura del Sistema
@@ -50,7 +50,7 @@ graph LR
 - **Frontend**: Next.js 15 (App Router), TypeScript, Tailwind CSS, shadcn/ui.
 - **Backend & Proxy**: Express.js con Model Context Protocol (MCP) SDK.
 - **Autenticación**: Supabase Auth (SSR).
-- **IA**: Anthropic SDK (Claude 3.5 Sonnet).
+- **IA**: Anthropic SDK (Claude Sonnet 4.6).
 
 ---
 

@@ -2,21 +2,21 @@
 
 ## Proyecto
 
-Docs Chat — chat sobre documentos propios (PDF/MD) con fuentes visibles y score de confianza.
+n8n Ops Center — Dashboard para monitoreo y debugging inteligente de workflows n8n mediante MCP.
 
 ## AI Feature
 
-- text-embedding-3-small (OpenAI) para vectorizar chunks de documentos
-- pgvector en Supabase para similarity search (cosine)
-- Pipeline completo: ingest → chunk → embed → store → retrieve → generate
-- Source attribution: cada respuesta muestra fragmentos exactos y similarity score
-- Anthropic SDK (claude-sonnet-4-6) para generación con contexto RAG
+- Integración con Anthropic API para análisis de errores en ejecuciones de workflows.
+- Uso de **Claude Sonnet 4.6** para interpretar mensajes de error y sugerir soluciones.
+- Contexto de ejecución: workflowId, executionId, nodeName y errorMessage.
+- Formato de respuesta: Causa probable + Fix sugerido (texto plano).
 
-## Stack nuevo (respecto al scaffold)
+## Stack
 
-- pdf-parse para extracción de texto desde PDFs
-- langchain + @langchain/openai para chunking y embedding pipeline
-- Nueva tabla `documents` y `document_chunks` con columna embedding vector(1536)
+- Next.js 15 (App Router) + TypeScript.
+- MCP Server (Express) actuando como proxy para la n8n API.
+- Supabase Auth (SSR) para protección de rutas.
+- Tailwind CSS + shadcn/ui para la interfaz.
 
 ## Model
 
